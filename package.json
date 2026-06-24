@@ -1,0 +1,13 @@
+{
+  "name": "zenya-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke:s1": "node scripts/smoke-s1.mjs",
+    "test": "node --test",
+    "check": "npm run smoke:s1 && npm test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

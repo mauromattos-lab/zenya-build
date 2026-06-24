@@ -4,3 +4,6 @@ node_modules/
 chatwoot/
 dist/
 *.log
+
+!.env.example
+!.env.chatwoot.example
