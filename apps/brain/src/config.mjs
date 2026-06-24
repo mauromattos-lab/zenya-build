@@ -8,14 +8,18 @@ export function readBrainConfig(env = process.env) {
     chatwootApiToken: env.CHATWOOT_API_TOKEN ?? '',
     supabaseUrl: env.SUPABASE_URL ?? '',
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+    databaseUrl: env.DATABASE_URL ?? '',
     llmApiKey: env.ZENYA_LLM_API_KEY ?? ''
   }
 }
 
 export function readiness(config) {
+  const supabaseUrl = config.supabaseUrl ?? ''
+  const supabaseServiceRoleKey = config.supabaseServiceRoleKey ?? ''
+  const databaseUrl = config.databaseUrl ?? ''
   return {
     chatwootConfigured: config.chatwootAccountId.length > 0 && config.chatwootApiToken.length > 0,
-    supabaseConfigured: config.supabaseUrl.length > 0 && config.supabaseServiceRoleKey.length > 0,
+    supabaseConfigured: (supabaseUrl.length > 0 && supabaseServiceRoleKey.length > 0) || databaseUrl.length > 0,
     llmConfigured: config.llmApiKey.length > 0
   }
 }
