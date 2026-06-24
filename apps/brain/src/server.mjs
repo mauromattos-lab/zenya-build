@@ -1,8 +1,14 @@
 import { createServer as createHttpServer } from 'node:http'
 import { readBrainConfig, readiness } from './config.mjs'
+import { createConversationTurnRuntime } from './turn/conversation-turn.mjs'
 
 export function createBrainServer(options = {}) {
   const config = options.config ?? readBrainConfig()
+  const turnRuntime = options.turnRuntime ?? createConversationTurnRuntime({
+    config,
+    recorder: options.recorder,
+    transcriber: options.transcriber
+  })
 
   return createHttpServer(async (req, res) => {
     try {
@@ -19,13 +25,23 @@ export function createBrainServer(options = {}) {
 
       if (req.method === 'POST' && req.url === '/webhooks/chatwoot') {
         const payload = await readJson(req)
+        const enqueued = turnRuntime.enqueueChatwootEvent(payload)
         sendJson(res, 200, {
           ok: true,
           accepted: true,
           source: 'chatwoot',
           event: payload.event ?? payload.event_type ?? 'unknown',
           tenant: config.tenant,
-          reply: 'stub: brain skeleton received the Chatwoot event'
+          queueKey: enqueued.queueKey,
+          messageId: enqueued.message.id
+        })
+        return
+      }
+
+      if (req.method === 'GET' && req.url === '/debug/turns') {
+        sendJson(res, 200, {
+          ok: true,
+          turns: turnRuntime.getTurns()
         })
         return
       }

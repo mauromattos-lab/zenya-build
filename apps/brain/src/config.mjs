@@ -9,7 +9,11 @@ export function readBrainConfig(env = process.env) {
     supabaseUrl: env.SUPABASE_URL ?? '',
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY ?? '',
     databaseUrl: env.DATABASE_URL ?? '',
-    llmApiKey: env.ZENYA_LLM_API_KEY ?? ''
+    llmApiKey: env.ZENYA_LLM_API_KEY ?? '',
+    model: env.ZENYA_MODEL ?? 'gpt-4o-mini',
+    memoryWindow: parsePositiveInteger(env.ZENYA_MEMORY_WINDOW, 50),
+    debounceMs: parsePositiveInteger(env.ZENYA_DEBOUNCE_MS, 800),
+    activeTools: parseList(env.ZENYA_ACTIVE_TOOLS)
   }
 }
 
@@ -31,4 +35,18 @@ function parsePort(value, fallback) {
     throw new Error(`Invalid BRAIN_PORT: ${value}`)
   }
   return parsed
+}
+
+function parsePositiveInteger(value, fallback) {
+  if (value === undefined || value === '') return fallback
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Invalid positive integer: ${value}`)
+  }
+  return parsed
+}
+
+function parseList(value) {
+  if (value === undefined || value.trim().length === 0) return []
+  return value.split(',').map((entry) => entry.trim()).filter(Boolean)
 }
