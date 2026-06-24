@@ -6,7 +6,8 @@ describe('conversation-turn', () => {
   it('agrega burst dentro do debounce em um unico turno', async () => {
     const recorded = []
     const runtime = createConversationTurnRuntime({
-      config: { tenant: 'tenant-s3', debounceMs: 50, model: 'gpt-4o-mini', activeTools: ['agenda'] },
+      config: { tenant: 'tenant-s3', debounceMs: 50, model: 'gpt-4o-mini', activeTools: ['agenda'], credentials: { llm: { apiKey: 'test-key' } } },
+      llmClient: fakeLlm,
       recorder: async (call) => {
         recorded.push(call)
         return { ok: true }
@@ -44,7 +45,8 @@ describe('conversation-turn', () => {
 
   it('produz TurnUnderstanding persistido no runtime', async () => {
     const runtime = createConversationTurnRuntime({
-      config: { tenant: 'tenant-s3', debounceMs: 1, model: 'gpt-4o-mini', activeTools: [] },
+      config: { tenant: 'tenant-s3', debounceMs: 1, model: 'gpt-4o-mini', activeTools: [], credentials: { llm: { apiKey: 'test-key' } } },
+      llmClient: fakeLlm,
       recorder: async () => ({ ok: true })
     })
     const enqueued = runtime.enqueueChatwootEvent(chatwootPayload({ id: 4, content: 'ola' }))
@@ -68,5 +70,21 @@ function chatwootPayload({ id, content, attachments = [] }) {
     },
     conversation: { id: 'conv-1' },
     sender: { id: 'contact-1' }
+  }
+}
+
+async function fakeLlm({ userText, activeTools }) {
+  return {
+    resposta: `Resposta real fake para: ${userText}`,
+    turnUnderstanding: {
+      intent: 'message_received',
+      leadSignals: [],
+      actionsTaken: []
+    },
+    usage: {
+      tokensIn: 11,
+      tokensOut: 7
+    },
+    activeTools
   }
 }

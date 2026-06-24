@@ -10,7 +10,8 @@ export function readBrainConfig(env = process.env) {
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY ?? '',
     databaseUrl: env.DATABASE_URL ?? '',
     llmApiKey: env.ZENYA_LLM_API_KEY ?? '',
-    model: env.ZENYA_MODEL ?? 'gpt-4o-mini',
+    model: env.ZENYA_MODEL ?? 'gpt-4.1-mini',
+    systemPrompt: env.ZENYA_SYSTEM_PROMPT ?? 'Você é a Zenya. Responda com clareza, em português, como uma atendente humana.',
     memoryWindow: parsePositiveInteger(env.ZENYA_MEMORY_WINDOW, 50),
     debounceMs: parsePositiveInteger(env.ZENYA_DEBOUNCE_MS, 800),
     activeTools: parseList(env.ZENYA_ACTIVE_TOOLS)

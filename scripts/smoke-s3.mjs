@@ -8,14 +8,16 @@ import { recordModelCall } from '../apps/brain/src/observability/model-call-reco
 
 const execFileAsync = promisify(execFile)
 const env = { ...process.env, ...await readDotEnv(new URL('../.env', import.meta.url)) }
-const tenant = `smoke-s3-${randomUUID()}`
+const tenant = 'demo'
 const conversationId = `conv-${randomUUID()}`
 
 const runtime = createConversationTurnRuntime({
   config: {
     tenant,
     debounceMs: 5,
-    model: 'gpt-4o-mini',
+    model: 'gpt-4.1-mini',
+    llmApiKey: env.ZENYA_LLM_API_KEY,
+    systemPrompt: 'Você é a Zenya. Responda em português, curto e humano.',
     activeTools: ['agenda']
   },
   recorder: (call) => recordModelCall(call, { env })
@@ -26,6 +28,7 @@ runtime.enqueueChatwootEvent(payload({ id: 'msg-2', content: 'quero marcar horar
 const turn = await runtime.flush(first.queueKey)
 
 assert.equal(turn.messageIds.length, 2)
+assert.ok(turn.resposta.length > 0)
 assert.equal(turn.turnUnderstanding.messageCount, 2)
 assert.deepEqual(turn.turnUnderstanding.offeredTools, ['agenda'])
 
@@ -41,11 +44,12 @@ const { stdout } = await execFileAsync('psql', [
     where tenant = '${tenant}'
       and conversa_id = '${conversationId}'
       and papel = 'main'
-      and modelo = 'gpt-4o-mini'`
+      and modelo = 'gpt-4.1-mini'
+      and custo > 0`
 ])
 
 assert.equal(stdout.trim(), '1')
-console.log(`S3 smoke PASS: burst virou um turno e gravou model_calls para ${tenant}`)
+console.log(`S3 smoke PASS: turno real respondeu e gravou model_calls com custo > 0 para ${tenant}`)
 
 function payload({ id, content }) {
   return {

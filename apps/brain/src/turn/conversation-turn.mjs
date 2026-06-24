@@ -1,10 +1,12 @@
 import { recordModelCall } from '../observability/model-call-recorder.mjs'
+import { callOpenAiTurn, resolveTenantLlmApiKey } from '../llm/openai-client.mjs'
 
 const TOOL_CATALOG = ['agenda', 'pagamento', 'ecommerce', 'drive', 'kb', 'handoff']
 
 export function createConversationTurnRuntime(options = {}) {
   const config = options.config ?? {}
   const recorder = options.recorder ?? recordModelCall
+  const llmClient = options.llmClient ?? callOpenAiTurn
   const transcriber = options.transcriber ?? defaultTranscriber
   const debounceMs = config.debounceMs ?? 800
   const queues = new Map()
@@ -50,6 +52,7 @@ export function createConversationTurnRuntime(options = {}) {
     const turn = await runAgentTurn({
       config,
       recorder,
+      llmClient,
       messages,
       activeTools: enabledTools(config.activeTools)
     })
@@ -58,32 +61,54 @@ export function createConversationTurnRuntime(options = {}) {
   }
 }
 
-export async function runAgentTurn({ config, recorder = recordModelCall, messages, activeTools }) {
+export async function runAgentTurn({ config, recorder = recordModelCall, llmClient = callOpenAiTurn, messages, activeTools }) {
   const startedAt = Date.now()
   const tenant = config.tenant ?? messages[0]?.tenant ?? 'demo'
   const conversationId = messages[0]?.conversationId ?? 'unknown'
   const inputText = messages.map((message) => message.text).filter(Boolean).join('\n')
-  const resposta = inputText.length > 0
-    ? `Recebi ${messages.length} mensagem(ns). Stub do agente pronto para processar.`
-    : ''
+  const model = config.model ?? 'gpt-4.1-mini'
+  let llmResult
+  let llmError = null
+  try {
+    llmResult = await llmClient({
+      apiKey: resolveTenantLlmApiKey(config, tenant),
+      model,
+      systemPrompt: config.systemPrompt ?? 'Você é a Zenya. Responda com clareza, em português.',
+      userText: inputText,
+      activeTools,
+      memoryWindow: config.memoryWindow ?? 50
+    })
+  } catch (error) {
+    llmError = error instanceof Error ? error : new Error('LLM call failed')
+    llmResult = {
+      resposta: '',
+      turnUnderstanding: {
+        intent: 'llm_error',
+        leadSignals: [],
+        actionsTaken: []
+      },
+      usage: { tokensIn: estimateTokens(inputText), tokensOut: 0 }
+    }
+  }
+
+  const resposta = llmResult.resposta
   const understanding = {
-    intent: inferIntent(inputText),
-    leadSignals: [],
-    actionsTaken: [],
+    ...llmResult.turnUnderstanding,
     messageCount: messages.length,
     offeredTools: activeTools
   }
   const latenciaMs = Date.now() - startedAt
-
   await recorder({
     tenant,
     papel: 'main',
-    modelo: config.model ?? 'gpt-4o-mini',
-    tokensIn: estimateTokens(inputText),
-    tokensOut: estimateTokens(resposta),
+    modelo: model,
+    tokensIn: llmResult.usage.tokensIn,
+    tokensOut: llmResult.usage.tokensOut,
     latenciaMs,
-    sucesso: resposta.length > 0,
-    emptyReply: resposta.length === 0,
+    sucesso: llmError === null && resposta.length > 0,
+    erro: llmError?.message,
+    finding: llmError === null ? undefined : 'gateway.failure',
+    emptyReply: llmError === null && resposta.length === 0,
     conversaId: conversationId
   })
 
@@ -94,6 +119,11 @@ export async function runAgentTurn({ config, recorder = recordModelCall, message
     inputText,
     resposta,
     turnUnderstanding: understanding,
+    llm: {
+      model,
+      tokensIn: llmResult.usage.tokensIn,
+      tokensOut: llmResult.usage.tokensOut
+    },
     createdAt: new Date().toISOString()
   }
 }
