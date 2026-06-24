@@ -8,6 +8,7 @@ describe('conversation-turn', () => {
     const runtime = createConversationTurnRuntime({
       config: { tenant: 'tenant-s3', debounceMs: 50, model: 'gpt-4o-mini', activeTools: ['agenda'], credentials: { llm: { apiKey: 'test-key' } } },
       llmClient: fakeLlm,
+      delivery: null,
       recorder: async (call) => {
         recorded.push(call)
         return { ok: true }
@@ -47,6 +48,7 @@ describe('conversation-turn', () => {
     const runtime = createConversationTurnRuntime({
       config: { tenant: 'tenant-s3', debounceMs: 1, model: 'gpt-4o-mini', activeTools: [], credentials: { llm: { apiKey: 'test-key' } } },
       llmClient: fakeLlm,
+      delivery: null,
       recorder: async () => ({ ok: true })
     })
     const enqueued = runtime.enqueueChatwootEvent(chatwootPayload({ id: 4, content: 'ola' }))

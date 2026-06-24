@@ -14,6 +14,13 @@ export function readBrainConfig(env = process.env) {
     systemPrompt: env.ZENYA_SYSTEM_PROMPT ?? 'Você é a Zenya. Responda com clareza, em português, como uma atendente humana.',
     memoryWindow: parsePositiveInteger(env.ZENYA_MEMORY_WINDOW, 50),
     debounceMs: parsePositiveInteger(env.ZENYA_DEBOUNCE_MS, 800),
+    delivery: {
+      wordsPerMinute: parsePositiveInteger(env.ZENYA_DELIVERY_WPM, 150),
+      gapMs: parsePositiveInteger(env.ZENYA_DELIVERY_GAP_MS, 1000),
+      capTextMs: parsePositiveInteger(env.ZENYA_DELIVERY_CAP_TEXT_MS, 25_000),
+      capZapiMs: parsePositiveInteger(env.ZENYA_DELIVERY_CAP_ZAPI_MS, 15_000),
+      capAudioMs: parsePositiveInteger(env.ZENYA_DELIVERY_CAP_AUDIO_MS, 12_000)
+    },
     activeTools: parseList(env.ZENYA_ACTIVE_TOOLS)
   }
 }

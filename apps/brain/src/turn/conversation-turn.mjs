@@ -1,5 +1,6 @@
 import { recordModelCall } from '../observability/model-call-recorder.mjs'
 import { callOpenAiTurn, resolveTenantLlmApiKey } from '../llm/openai-client.mjs'
+import { createDeliveryLayer } from '../delivery/delivery-layer.mjs'
 
 const TOOL_CATALOG = ['agenda', 'pagamento', 'ecommerce', 'drive', 'kb', 'handoff']
 
@@ -8,6 +9,15 @@ export function createConversationTurnRuntime(options = {}) {
   const recorder = options.recorder ?? recordModelCall
   const llmClient = options.llmClient ?? callOpenAiTurn
   const transcriber = options.transcriber ?? defaultTranscriber
+  const latestMessageIds = new Map()
+  const delivery = options.delivery ?? createDeliveryLayer({
+    config,
+    chatwoot: options.chatwoot,
+    recorder,
+    chunker: options.deliveryChunker,
+    sleep: options.sleep,
+    latestMessageIdForConversation: (conversationId) => latestMessageIds.get(conversationId)
+  })
   const debounceMs = config.debounceMs ?? 800
   const queues = new Map()
   const turns = []
@@ -19,6 +29,7 @@ export function createConversationTurnRuntime(options = {}) {
         transcriber
       })
       const queueKey = message.conversationId
+      latestMessageIds.set(queueKey, message.id)
       const queue = queues.get(queueKey) ?? { messages: [], timer: null, sequence: 0 }
       queue.messages.push(message)
       queue.sequence += 1
@@ -53,6 +64,7 @@ export function createConversationTurnRuntime(options = {}) {
       config,
       recorder,
       llmClient,
+      delivery,
       messages,
       activeTools: enabledTools(config.activeTools)
     })
@@ -61,7 +73,7 @@ export function createConversationTurnRuntime(options = {}) {
   }
 }
 
-export async function runAgentTurn({ config, recorder = recordModelCall, llmClient = callOpenAiTurn, messages, activeTools }) {
+export async function runAgentTurn({ config, recorder = recordModelCall, llmClient = callOpenAiTurn, delivery = null, messages, activeTools }) {
   const startedAt = Date.now()
   const tenant = config.tenant ?? messages[0]?.tenant ?? 'demo'
   const conversationId = messages[0]?.conversationId ?? 'unknown'
@@ -112,6 +124,19 @@ export async function runAgentTurn({ config, recorder = recordModelCall, llmClie
     conversaId: conversationId
   })
 
+  const deliveryResult = delivery === null
+    ? null
+    : await delivery.deliver({
+      tenant,
+      conversationId,
+      accountId: config.chatwootAccountId,
+      startedMessageId: messages.at(-1)?.id,
+      channel: messages.at(-1)?.channel ?? 'text',
+      outputKind: messages.at(-1)?.type === 'audio' ? 'audio' : 'text',
+      resposta,
+      config: config.delivery
+    })
+
   return {
     tenant,
     conversationId,
@@ -124,6 +149,7 @@ export async function runAgentTurn({ config, recorder = recordModelCall, llmClie
       tokensIn: llmResult.usage.tokensIn,
       tokensOut: llmResult.usage.tokensOut
     },
+    delivery: deliveryResult,
     createdAt: new Date().toISOString()
   }
 }
@@ -145,6 +171,7 @@ export function normalizeChatwootMessage(payload, options = {}) {
     conversationId: String(conversation.id ?? payload.conversation_id ?? message.conversation_id ?? sender.id ?? 'unknown'),
     contactId: String(sender.id ?? payload.contact_id ?? message.sender_id ?? 'unknown'),
     type: contentType,
+    channel: String(payload.channel ?? message.channel ?? 'text'),
     text: contentType === 'audio'
       ? options.transcriber(audioAttachment, payload)
       : String(rawText),

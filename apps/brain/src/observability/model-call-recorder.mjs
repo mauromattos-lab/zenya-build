@@ -4,6 +4,7 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 const MODEL_PRICES_USD_PER_1M = {
+  'delivery-layer': { input: 0, output: 0 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-4o': { input: 5.00, output: 15.00 },
   'gpt-4.1-mini': { input: 0.40, output: 1.60 }
