@@ -36,7 +36,18 @@ try {
   const webhook = await fetch(`${baseUrl}/webhooks/chatwoot`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ event: 'message_created' })
+    body: JSON.stringify({
+      event: 'message_created',
+      message: {
+        id: 'smoke-s1-incoming',
+        message_type: 'incoming',
+        content: 'oi',
+        conversation_id: 'conv-smoke-s1',
+        sender_id: 'contact-smoke-s1',
+      },
+      conversation: { id: 'conv-smoke-s1' },
+      sender: { id: 'contact-smoke-s1', type: 'Contact' },
+    })
   })
   assert.equal(webhook.status, 200)
   const webhookBody = await webhook.json()

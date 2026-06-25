@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createBrainServer } from './server.mjs'
+import { createBrainServer, shouldProcessChatwootEvent } from './server.mjs'
 
 describe('brain skeleton', () => {
   let server
@@ -49,7 +49,18 @@ describe('brain skeleton', () => {
     const response = await fetch(`${baseUrl}/webhooks/chatwoot`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ event: 'message_created' })
+      body: JSON.stringify({
+        event: 'message_created',
+        message: {
+          id: 'test-incoming',
+          message_type: 'incoming',
+          content: 'oi',
+          conversation_id: 'conv-test',
+          sender_id: 'contact-test',
+        },
+        conversation: { id: 'conv-test' },
+        sender: { id: 'contact-test', type: 'Contact' },
+      })
     })
     const body = await response.json()
 
@@ -57,5 +68,12 @@ describe('brain skeleton', () => {
     assert.equal(body.accepted, true)
     assert.equal(body.source, 'chatwoot')
     assert.equal(body.event, 'message_created')
+  })
+
+  it('ignora eventos outgoing para evitar loop infinito', async () => {
+    assert.equal(shouldProcessChatwootEvent({
+      event: 'message_created',
+      message: { message_type: 'outgoing', content: 'bot' }
+    }), false)
   })
 })

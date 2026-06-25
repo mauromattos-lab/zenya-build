@@ -7,6 +7,7 @@
     "smoke:s2": "node scripts/smoke-s2.mjs",
     "smoke:s3": "node scripts/smoke-s3.mjs",
     "smoke:s4": "node scripts/smoke-s4.mjs",
+    "smoke:s4i": "node scripts/smoke-s4i.mjs",
     "test": "node --test",
     "check": "npm run smoke:s1 && npm test"
   },

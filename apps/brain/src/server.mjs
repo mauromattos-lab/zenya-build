@@ -1,13 +1,19 @@
 import { createServer as createHttpServer } from 'node:http'
+import { createChatwootClient } from './chatwoot/chatwoot-client.mjs'
 import { readBrainConfig, readiness } from './config.mjs'
 import { createConversationTurnRuntime } from './turn/conversation-turn.mjs'
 
 export function createBrainServer(options = {}) {
   const config = options.config ?? readBrainConfig()
+  const chatwoot = options.chatwoot ?? maybeCreateChatwootClient(config)
   const turnRuntime = options.turnRuntime ?? createConversationTurnRuntime({
     config,
+    chatwoot,
     recorder: options.recorder,
-    transcriber: options.transcriber
+    transcriber: options.transcriber,
+    sleep: options.sleep,
+    deliveryChunker: options.deliveryChunker,
+    llmClient: options.llmClient
   })
 
   return createHttpServer(async (req, res) => {
@@ -25,6 +31,15 @@ export function createBrainServer(options = {}) {
 
       if (req.method === 'POST' && req.url === '/webhooks/chatwoot') {
         const payload = await readJson(req)
+        if (!shouldProcessChatwootEvent(payload)) {
+          sendJson(res, 200, {
+            ok: true,
+            accepted: false,
+            ignored: true,
+            reason: 'not_incoming_message_created'
+          })
+          return
+        }
         const enqueued = turnRuntime.enqueueChatwootEvent(payload)
         sendJson(res, 200, {
           ok: true,
@@ -54,6 +69,26 @@ export function createBrainServer(options = {}) {
       })
     }
   })
+}
+
+export function shouldProcessChatwootEvent(payload) {
+  const event = payload.event ?? payload.event_type
+  const message = payload.message ?? payload
+  const messageType = message.message_type ?? payload.message_type
+  const senderType = message.sender_type ?? payload.sender_type ?? message.sender?.type ?? payload.sender?.type
+  const privateMessage = message.private ?? payload.private
+  return event === 'message_created'
+    && messageType === 'incoming'
+    && senderType !== 'AgentBot'
+    && senderType !== 'agent_bot'
+    && privateMessage !== true
+}
+
+function maybeCreateChatwootClient(config) {
+  if (config.chatwootBaseUrl.length === 0 || config.chatwootAccountId.length === 0 || config.chatwootApiToken.length === 0) {
+    return undefined
+  }
+  return createChatwootClient(config)
 }
 
 export async function startBrainServer(config = readBrainConfig()) {
