@@ -1,6 +1,7 @@
 import { recordModelCall } from '../observability/model-call-recorder.mjs'
 import { callOpenAiTurn, resolveTenantLlmApiKey } from '../llm/openai-client.mjs'
 import { createDeliveryLayer } from '../delivery/delivery-layer.mjs'
+import { createAgendaToolSafe } from '../tools/agenda/agenda-tool.mjs'
 
 const TOOL_CATALOG = ['agenda', 'pagamento', 'ecommerce', 'drive', 'kb', 'handoff']
 
@@ -9,6 +10,7 @@ export function createConversationTurnRuntime(options = {}) {
   const recorder = options.recorder ?? recordModelCall
   const llmClient = options.llmClient ?? callOpenAiTurn
   const transcriber = options.transcriber ?? defaultTranscriber
+  const tools = options.tools ?? buildTools(config)
   const latestMessageIds = new Map()
   const delivery = options.delivery ?? createDeliveryLayer({
     config,
@@ -182,6 +184,18 @@ export function normalizeChatwootMessage(payload, options = {}) {
 export function enabledTools(activeTools = []) {
   const requested = new Set(activeTools)
   return TOOL_CATALOG.filter((tool) => requested.has(tool))
+}
+
+export function buildTools(config = {}) {
+  const tools = {}
+  if (enabledTools(config.activeTools).includes('agenda')) {
+    tools.agenda = createAgendaToolSafe({
+      serviceAccountJson: config.googleCalendarServiceAccountJson,
+      calendarId: config.googleCalendarId,
+      timeZone: config.tenantTimeZone
+    })
+  }
+  return tools
 }
 
 function defaultTranscriber(attachment) {

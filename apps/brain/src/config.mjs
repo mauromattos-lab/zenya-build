@@ -21,6 +21,9 @@ export function readBrainConfig(env = process.env) {
       capZapiMs: parsePositiveInteger(env.ZENYA_DELIVERY_CAP_ZAPI_MS, 15_000),
       capAudioMs: parsePositiveInteger(env.ZENYA_DELIVERY_CAP_AUDIO_MS, 12_000)
     },
+    googleCalendarServiceAccountJson: env.GOOGLE_CALENDAR_SA_JSON ?? '',
+    googleCalendarId: env.GOOGLE_CALENDAR_ID ?? '',
+    tenantTimeZone: env.ZENYA_TENANT_TZ ?? 'America/Sao_Paulo',
     activeTools: parseList(env.ZENYA_ACTIVE_TOOLS)
   }
 }
