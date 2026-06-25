@@ -1,6 +1,7 @@
 import { recordModelCall } from '../observability/model-call-recorder.mjs'
 import { callOpenAiTurn, resolveTenantLlmApiKey } from '../llm/openai-client.mjs'
 import { createDeliveryLayer } from '../delivery/delivery-layer.mjs'
+import { escalateToHuman } from '../handoff/handoff.mjs'
 import { createAgendaToolSafe } from '../tools/agenda/agenda-tool.mjs'
 
 const TOOL_CATALOG = ['agenda', 'pagamento', 'ecommerce', 'drive', 'kb', 'handoff']
@@ -11,6 +12,9 @@ export function createConversationTurnRuntime(options = {}) {
   const llmClient = options.llmClient ?? callOpenAiTurn
   const transcriber = options.transcriber ?? defaultTranscriber
   const tools = options.tools ?? buildTools(config)
+  const handoff = options.handoff ?? (options.chatwoot === undefined
+    ? null
+    : ({ conversationId }) => escalateToHuman({ chatwoot: options.chatwoot, conversationId }))
   const latestMessageIds = new Map()
   const delivery = options.delivery ?? createDeliveryLayer({
     config,
@@ -67,6 +71,7 @@ export function createConversationTurnRuntime(options = {}) {
       recorder,
       llmClient,
       delivery,
+      handoff,
       messages,
       activeTools: enabledTools(config.activeTools)
     })
@@ -75,7 +80,7 @@ export function createConversationTurnRuntime(options = {}) {
   }
 }
 
-export async function runAgentTurn({ config, recorder = recordModelCall, llmClient = callOpenAiTurn, delivery = null, messages, activeTools }) {
+export async function runAgentTurn({ config, recorder = recordModelCall, llmClient = callOpenAiTurn, delivery = null, handoff = null, messages, activeTools }) {
   const startedAt = Date.now()
   const tenant = config.tenant ?? messages[0]?.tenant ?? 'demo'
   const conversationId = messages[0]?.conversationId ?? 'unknown'
@@ -126,7 +131,11 @@ export async function runAgentTurn({ config, recorder = recordModelCall, llmClie
     conversaId: conversationId
   })
 
-  const deliveryResult = delivery === null
+  const handoffRequested = shouldEscalateToHuman(understanding.actionsTaken)
+  const handoffResult = handoffRequested && handoff !== null
+    ? await handoff({ tenant, conversationId, messages, understanding })
+    : null
+  const deliveryResult = delivery === null || handoffResult !== null
     ? null
     : await delivery.deliver({
       tenant,
@@ -152,8 +161,19 @@ export async function runAgentTurn({ config, recorder = recordModelCall, llmClie
       tokensOut: llmResult.usage.tokensOut
     },
     delivery: deliveryResult,
+    handoff: handoffResult,
     createdAt: new Date().toISOString()
   }
+}
+
+export function shouldEscalateToHuman(actionsTaken = []) {
+  return actionsTaken.some((action) => {
+    const normalized = String(action).toLowerCase()
+    return normalized === 'handoff'
+      || normalized.includes('human')
+      || normalized.includes('humano')
+      || normalized.includes('escalat')
+  })
 }
 
 export function normalizeChatwootMessage(payload, options = {}) {

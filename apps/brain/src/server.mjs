@@ -1,6 +1,8 @@
 import { createServer as createHttpServer } from 'node:http'
 import { createChatwootClient } from './chatwoot/chatwoot-client.mjs'
 import { readBrainConfig, readiness } from './config.mjs'
+import { isBotPaused } from './handoff/handoff.mjs'
+import { normalizeChatwootMessage } from './turn/conversation-turn.mjs'
 import { createConversationTurnRuntime } from './turn/conversation-turn.mjs'
 
 export function createBrainServer(options = {}) {
@@ -37,6 +39,20 @@ export function createBrainServer(options = {}) {
             accepted: false,
             ignored: true,
             reason: 'not_incoming_message_created'
+          })
+          return
+        }
+        const message = normalizeChatwootMessage(payload, {
+          tenant: config.tenant ?? 'demo',
+          transcriber: () => ''
+        })
+        if (await isBotPaused(chatwoot, message.conversationId)) {
+          sendJson(res, 200, {
+            ok: true,
+            accepted: false,
+            ignored: true,
+            reason: 'agente_off',
+            conversationId: message.conversationId
           })
           return
         }

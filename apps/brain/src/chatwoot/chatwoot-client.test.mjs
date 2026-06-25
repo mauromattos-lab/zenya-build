@@ -27,4 +27,53 @@ describe('chatwoot-client', () => {
     assert.equal(JSON.parse(calls[2].init.body).message_type, 'outgoing')
     assert.equal(calls.every((call) => call.init.headers.api_access_token === 'token-test'), true)
   })
+
+  it('consulta e substitui labels da conversa', async () => {
+    const calls = []
+    const client = createChatwootClient({
+      chatwootBaseUrl: 'http://chatwoot.test',
+      chatwootAccountId: '2',
+      chatwootApiToken: 'token-test'
+    }, {
+      fetchImpl: async (url, init) => {
+        calls.push({ url: String(url), init })
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return init.method === 'GET'
+              ? { payload: ['vip', 'agente-off'] }
+              : { labels: JSON.parse(init.body).labels }
+          }
+        }
+      }
+    })
+
+    assert.deepEqual(await client.getConversationLabels('10'), ['vip', 'agente-off'])
+    assert.deepEqual(await client.setLabels('10', ['vip']), ['vip'])
+
+    assert.equal(calls[0].init.method, 'GET')
+    assert.equal(calls[0].url, 'http://chatwoot.test/api/v1/accounts/2/conversations/10/labels')
+    assert.equal(calls[1].init.method, 'POST')
+    assert.deepEqual(JSON.parse(calls[1].init.body), { labels: ['vip'] })
+  })
+
+  it('atribui e desatribui conversa preservando o formato da API', async () => {
+    const calls = []
+    const client = createChatwootClient({
+      chatwootBaseUrl: 'http://chatwoot.test',
+      chatwootAccountId: '2',
+      chatwootApiToken: 'token-test'
+    }, {
+      fetchImpl: async (url, init) => {
+        calls.push({ url: String(url), init })
+        return { ok: true, status: 200, async json() { return { ok: true } } }
+      }
+    })
+
+    await client.assignConversation('10', null)
+
+    assert.equal(calls[0].url, 'http://chatwoot.test/api/v1/accounts/2/conversations/10/assignments')
+    assert.deepEqual(JSON.parse(calls[0].init.body), { assignee_id: null })
+  })
 })

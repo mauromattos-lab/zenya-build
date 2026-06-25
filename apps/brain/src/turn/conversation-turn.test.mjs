@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createConversationTurnRuntime, enabledTools, normalizeChatwootMessage } from './conversation-turn.mjs'
+import { createConversationTurnRuntime, enabledTools, normalizeChatwootMessage, shouldEscalateToHuman } from './conversation-turn.mjs'
 
 describe('conversation-turn', () => {
   it('agrega burst dentro do debounce em um unico turno', async () => {
@@ -57,6 +57,46 @@ describe('conversation-turn', () => {
     const turns = runtime.getTurns()
     assert.equal(turns.length, 1)
     assert.equal(turns[0].turnUnderstanding.intent, 'message_received')
+  })
+
+  it('escala para humano sem entregar resposta quando LLM pede handoff', async () => {
+    const delivered = []
+    const escalations = []
+    const runtime = createConversationTurnRuntime({
+      config: { tenant: 'tenant-s5', debounceMs: 1, model: 'gpt-4o-mini', activeTools: ['handoff'], credentials: { llm: { apiKey: 'test-key' } } },
+      llmClient: async () => ({
+        resposta: 'Vou acionar uma pessoa.',
+        turnUnderstanding: {
+          intent: 'handoff_requested',
+          leadSignals: [],
+          actionsTaken: ['handoff']
+        },
+        usage: { tokensIn: 5, tokensOut: 6 }
+      }),
+      delivery: {
+        deliver: async (entry) => {
+          delivered.push(entry)
+        }
+      },
+      handoff: async (entry) => {
+        escalations.push(entry)
+        return { conversationId: entry.conversationId, labels: ['agente-off'], assigneeId: null }
+      },
+      recorder: async () => ({ ok: true })
+    })
+    const enqueued = runtime.enqueueChatwootEvent(chatwootPayload({ id: 5, content: 'quero falar com humano' }))
+    await runtime.flush(enqueued.queueKey)
+
+    assert.equal(delivered.length, 0)
+    assert.equal(escalations.length, 1)
+    assert.equal(escalations[0].conversationId, 'conv-1')
+    assert.equal(runtime.getTurns()[0].handoff.assigneeId, null)
+  })
+
+  it('detecta sinais comuns de escala humana', () => {
+    assert.equal(shouldEscalateToHuman(['handoff']), true)
+    assert.equal(shouldEscalateToHuman(['encaminhar_humano']), true)
+    assert.equal(shouldEscalateToHuman(['responder']), false)
   })
 })
 
